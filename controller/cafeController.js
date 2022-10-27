@@ -120,6 +120,7 @@ const addProduct = async (req, res) => {
                 time_to_deliver: req.body.time_to_deliver,
                 addOns: JSON.parse(req.body.addOns),
                 vendor_id: req.payload._id,
+                category: req.body.category,
                 cafe_id: req.body.cafeId
             })
 
@@ -183,7 +184,7 @@ const deleteAddOn = async (req, res) => {
         const _id = req.params.id
         const addOnId = req.params.addOnId
 
-        const product = await Product.findByIdAndUpdate({ _id }, { $pull: { addOns: {id:addOnId} } }, { new: true })
+        const product = await Product.findByIdAndUpdate({ _id }, { $pull: { addOns: { id: addOnId } } }, { new: true })
         // const product = await Product.findByIdAndUpdate({ _id }, { $pull: { addOns: { $elemMatch: { id: addOnId } } } }, { new: true })
         // const product = await Product.findByIdAndUpdate({ _id }, { $pull: { addOn: { $in: addOnId } } }, { new: true })
         if (product) {

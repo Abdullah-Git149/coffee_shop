@@ -28,6 +28,10 @@ const productSchema = mongoose.Schema({
         type:Array,
         default:[]
     },
+    category: {
+        type: String,
+        default: null
+    },
     vendor_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User"

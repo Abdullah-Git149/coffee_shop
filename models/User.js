@@ -64,7 +64,7 @@ const userSchema = mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "Cafe"
     },
-   employee_id: {
+    employee_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User"
     },
@@ -89,6 +89,30 @@ const userSchema = mongoose.Schema({
     is_blocked: {
         type: Number,
         default: 0
+    },
+    user_social_token: {
+        type: String,
+        required: false,
+        trim: true,
+        default: null
+    },
+    user_social_type: {
+        type: String,
+        required: false,
+        trim: true,
+        default: null
+    },
+    user_device_type: {
+        type: String,
+        required: false,
+        trim: true,
+        default: null
+    },
+    user_device_token: {
+        type: String,
+        required: false,
+        trim: true,
+        default: null
     },
 },
     {

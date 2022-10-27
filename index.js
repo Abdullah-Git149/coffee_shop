@@ -5,9 +5,10 @@ const dotenv = require("dotenv")
 const cors = require('cors')
 const bodyParser = require('body-parser')
 const path = require("path")
-const vendorRoute = require("./routes/userRoute")
+const vendorRoute = require("./routes/vendorRoute")
 const cafeRoute = require("./routes/cafeRoute")
 const employeeRoute = require("./routes/employeeRoute")
+const userRoute = require("./routes/userRoute")
 // View Engine Setup
 app.set('views', path.join(__dirname, 'views'))
 app.set('view engine', 'ejs')
@@ -21,6 +22,7 @@ app.use(bodyParser.json());
 app.use(vendorRoute)
 app.use(cafeRoute)
 app.use(employeeRoute)
+app.use(userRoute)
 
 
 

@@ -1,250 +1,106 @@
 const User = require("../models/User")
-const bcrypt = require("bcryptjs")
-const { sendEmail } = require("../utils/utils")
 
-//  SIGN UP
-const signUp = async (req, res) => {
+const socialLogin = async (req, res) => {
     try {
+        const alreadyUserAsSocialToke = await User.findOne({ user_social_token: req.body.user_social_token })
 
-        const emailValidation = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/
-        const pass = /^(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{7,15}$/
-
-
-        if (!req.body.name) {
-            return res.status(400).json({ status: 0, message: " name is required" })
-        } else if (!req.body.email) {
-            return res.status(400).json({ status: 0, message: "Email is required" })
-        } else if (!req.body.email.match(emailValidation)) {
-            return res.status(400).json({ status: 0, message: "Invalid email address" })
-        } else if (!req.body.password) {
-            return res.status(400).json({ status: 0, message: "Password is required" })
-        } else if (!req.body.password.match(pass)) {
-            return res.status(400).json({ status: 0, message: "Password should be 8 characters long (should contain uppercase, lowercase, numeric and special character)" })
-        } else if (!req.body.confirm_password) {
-            return res.status(400).json({ status: 0, message: "Confirm Password is required" })
-        } else if (req.body.password !== req.body.confirm_password) {
-            return res.status(400).json({ status: 0, message: "Password not match" })
+        if (!req.body.user_social_token) {
+            return res.status(400).send({ status: 0, message: 'User Social Token field is required' });
+        }
+        else if (!req.body.user_social_type) {
+            return res.status(400).send({ status: 0, message: 'User Social Type field is required' });
+        }
+        else if (!req.body.user_device_type) {
+            return res.status(400).send({ status: 0, message: 'User Device Type field is required' });
+        }
+        else if (!req.body.user_device_token) {
+            return res.status(400).send({ status: 0, message: 'User Device Token field is required' });
         }
         else {
-            const check = await User.findOne({ email: req.body.email })
-            if (check) {
-                return res.status(400).json({ status: 0, message: "This email is occupied by another " })
+            const checkUser = await User.findOne({ user_social_token: req.body.user_social_token, role: "user" });
+            if (!checkUser) {
+                const newRecord = new User();
+                newRecord.user_social_token = req.body.user_social_token,
+                    newRecord.user_social_type = req.body.user_social_type,
+                    newRecord.user_device_type = req.body.user_device_type,
+                    newRecord.user_device_token = req.body.user_device_token
+                newRecord.email = req.body.email,
+                    newRecord.verified = 1
+                newRecord.name = req.body.name
+                newRecord.image = req.body.user_image,
+                    newRecord.number = req.body.number
+                newRecord.address = req.body.address
+                newRecord.city = req.body.city
+                newRecord.age = req.body.age
+                const token = await newRecord.generateAuthToken();
+                newRecord.authentication = token
+                const saveLogin = await newRecord.save();
+                return res.status(200).send({ status: 1, message: 'Login Successfully', saveLogin });
             } else {
+                const token = await checkUser.generateAuthToken();
+                const updatedRecord = await User.findOneAndUpdate({ _id: checkUser._id, role: "user" },
+                    { user_device_type: req.body.user_device_type, user_device_token: req.body.user_device_token, verified: 1, authentication: token }
+                    , { new: true });
+                return res.status(200).send({ status: 1, message: 'Login Successfully', updatedRecord });
+            }
+        }
+    }
+    catch (error) {
+        return res.status(500).json({ status: 0, message: error.message });
+    }
+}
 
-                const salt = 10
-                const hashPassword = await bcrypt.hash(req.body.password, salt)
-                const verificationCode = Math.floor(100000 + Math.random() * 900000)
+const logOut = async (req, res) => {
+    try {
 
-                const user = new User({
+        const user = await User.findOne({ _id: req.user._id, role: "user" })
+        if (user.authentication === null) {
+            return res.status(400).json({ status: 0, msg: "User already logOut" })
+        } else {
+            const logout = await User.findByIdAndUpdate({ _id: req.user._id, role: "user" }, { authentication: null, code: null, user_device_token: null, user_device_type: null, user_social_token: null, }, { new: true })
+            if (logout) {
+                return res.status(200).json({ status: 1, msg: "Successfully logged out" })
+            } else {
+                return res.status(400).json({ status: 0, msg: "Something went wrong" })
+            }
+        }
+    } catch (error) {
+        console.log(error.message);
+        return res.status(500).json({ error: error.message });
+    }
+}
+
+const editUser = async (req, res) => {
+
+    try {
+        const check = await User.findOne({ _id: req.user._id, role: "user" })
+        if (!check) {
+            return res.status(400).json({ status: 0, message: "User Not Found" })
+        } else {
+            const user = await User.findOneAndUpdate({ _id: req.user._id, role: "user" },
+                {
                     email: req.body.email,
+                    verified: 1,
                     name: req.body.name,
-                    password: hashPassword,
-                    code: verificationCode,
-                    verified: 0,
-                    role: "vendor"
-                })
+                    image: req.file ? req.file.path : req.body.user_image,
+                    number: req.body.number,
+                    address: req.body.address,
+                    city: req.body.city,
+                    age: req.body.age
+                },
+                { new: true })
 
-                await user.save().then(async (result) => {
-                    sendEmail(user, verificationCode)
-
-                    return res.status(200).json({ status: 1, message: "Account has been created", data: result })
-                }).catch((err) => {
-                    res.status(400).json({ status: 0, message: "Something went wrong", error: err.message })
-                })
-            }
-        }
-    } catch (error) {
-        console.log(error.message);
-        return res.status(500).send(error.message);
-
-    }
-}
-
-// FORGET PASSWORD
-const forgetPassword = async (req, res) => {
-    try {
-        if (!req.body.email) {
-            return res.status(400).json({ status: 0, message: "Email is required" });
-        } else {
-            const user = await User.findOne({ email: req.body.email, role: "vendor" })
-            if (!user) {
-                return res.status(400).json({ status: 0, message: "User not found" });
+            if (user) {
+                return res.status(200).json({ status: 1, message: "User Updated Successfully" })
             } else {
-                const verficationCode = Math.floor(100000 + Math.random() * 900000)
-                const newUser = await User.findByIdAndUpdate({ _id: user._id, role: "vendor" }, { code: verficationCode })
-                if (newUser) {
-                    sendEmail(user, verficationCode)
-                    return res.status(200).json({ status: 1, message: "Code successfully send to email : " + verficationCode, userId: newUser._id })
-                } else {
-                    return res.status(200).json({ status: 0, message: "Something went wrong" })
-                }
+                return res.status(400).json({ status: 0, message: "Something Went Wrong" })
             }
         }
+
     } catch (error) {
         console.log(error.message);
         return res.status(500).json({ error: error.message });
     }
 }
 
-// RESET PASSWORD
-const resetPassword = async (req, res) => {
-    try {
-
-        if (!req.body._id) {
-            return res.status(400).json({ status: 0, message: "User id is required" })
-        } else if (!req.body.password) {
-            return res.status(400).json({ status: 0, message: "Please enter a password" })
-        } else {
-            const user = await User.findById({ _id: req.body._id, role: "vendor" })
-            if (!user) {
-                return res.status(400).json({ status: 0, message: "User not found" })
-            } else {
-                const hashPassword = await bcrypt.hash(req.body.password, 10)
-
-                const hashedUser = await User.findByIdAndUpdate({ _id: user._id, role: "vendor" }, { password: hashPassword })
-                if (hashPassword) {
-                    return res.status(200).json({ status: 1, message: "Password changed Succussfully" })
-                } else {
-
-                    return res.status(400).json({ status: 0, message: "Something went wrong" })
-                }
-            }
-        }
-    } catch (error) {
-
-        console.log(error.message);
-        return res.status(500).json({ error: error.message });
-    }
-}  
-
-// UPDATE PASSWORD
-const updatePassword = async (req, res) => {
-    try {
-
-
-
-        if (!req.body.password) {
-            return res.status(400).json({ status: 0, message: "Please enter old password" })
-        } else if (!req.body.user_new_password) {
-            return res.status(400).json({ status: 0, message: "Please enter new password" })
-        }
-        const user = await User.findById(req.payload._id)
-
-
-        const isMatch = await bcrypt.compare(req.body.password, user.password)
-        if (!isMatch) {
-            return res.status(400).json({ status: 0, message: "Please enter correct old password" })
-        } else {
-            const hashPassword = await bcrypt.hash(req.body.user_new_password, 10)
-            const newUser = await User.findByIdAndUpdate({ _id: req.payload._id, role: "vendor" }, { password: hashPassword })
-            await newUser.save()
-
-            return res.status(200).json({ status: 1, message: "Password changed successfully" })
-
-        }
-    } catch (error) {
-        console.log(error.message);
-        return res.status(500).json({ error: error.message });
-
-    }
-}
-
-// // VERIFY USER
-const verifyUser = async (req, res) => {
-    try {
-        if (!req.body._id) {
-            return res.status(400).json({ status: 0, message: " Id is required" })
-        } else if (!req.body.verficationCode) {
-            return res.status(400).json({ status: 0, message: "verficationCode is required" })
-        }
-        await User.findOne({ _id: req.body._id, role: "vendor" }).then((result) => {
-            if (req.body.verficationCode == result.code) {
-                User.findByIdAndUpdate({ _id: req.body._id, role: "vendor" }, { verified: 1, code: null }, (error, result) => {
-                    if (error) {
-                        console.log(error.message);
-                        return res.status(400).json({ status: 0, message: "Something Went Wrong", error })
-                    }
-                    if (result) {
-                        return res.status(200).json({ status: 1, message: "OTP matched successfully" })
-                    }
-                })
-            } else {
-                return res.status(400).json({ status: 0, message: "OTP not matched" })
-            }
-        }).catch((err) => {
-            console.log(err.message);
-            return res.status(400).json({ status: 0, message: "Verification code not matched" })
-
-        })
-    } catch (error) {
-        console.log(error.message);
-        return res.status(500).json({ error: error.message });
-
-    }
-}
-
-// COMPLETE PROFILE
-const completeProfile = async (req, res) => {
-    try {
-        if (!req.body._id) {
-            return res.status(404).json({ status: 0, message: "ID is required" })
-        } else {
-            const user = await User.findOne({ _id: req.body._id, role: "vendor" })
-            if (!user) {
-                return res.status(400).send({ status: 0, message: "User not found" });
-            } else {
-                const updateUser = await User.findByIdAndUpdate({ _id: req.body._id, role: "vendor" },
-                    {
-                        number: req.body.number,
-                        address: req.body.address,
-                        city: req.body.city,
-                        age: req.body.age
-                    }, { new: true })
-
-                if (updateUser) {
-                    await updateUser.generateAuthToken()
-                    res.status(200).json({ status: 1, message: "Profile Completed", updateUser })
-                } else {
-                    return res.status(400).json({ status: 0, message: "Something Went Wrong" })
-                }
-            }
-
-        }
-    }
-    catch (error) {
-        console.log(error.message);
-        return res.status(400).send(error.message);
-    }
-}
-//  SIGN IN
-const signIn = async (req, res) => {
-    try {
-        if (!req.body.email) {
-            return res.status(404).json({ status: 0, message: "Email is required" })
-        } else if (!req.body.password) {
-            return res.status(404).json({ status: 0, message: "Password is required" })
-        } else {
-            const user = await User.findOne({ email: req.body.email })
-            if (!user) {
-                return res.status(404).json({ status: 0, message: "User not found" })
-            } else {
-                const isMatch = await bcrypt.compare(req.body.password, user.password)
-                if (!isMatch) {
-                    return res.status(404).json({ status: 0, message: "Password not match" })
-                } else {
-                    const token = await user.generateAuthToken();
-                    const updatedRecord = await User.findOneAndUpdate({ _id: user._id }, { isverified: 1, authentication: token }, { new: true });
-                    return res.status(200).json({ status: 1, message: "Login Successful", data: updatedRecord })
-
-                }
-            }
-        }
-    }
-    catch (error) {
-        console.log(error.message);
-        return res.status(400).send(error.message);
-    }
-}
-
-
-module.exports = { signUp, signIn, verifyUser, forgetPassword, resetPassword, updatePassword, completeProfile }
+module.exports = { socialLogin, logOut, editUser, editUser }
